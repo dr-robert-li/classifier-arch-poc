@@ -222,6 +222,46 @@ class TestEventSinkIdempotency:
         sink.close()
 
 
+class TestJSONLSQLiteSync:
+    """SC-3: after a successful /chat turn, JSONL line count == SQLite events rowcount."""
+
+    def test_jsonl_line_count_equals_sqlite_events_after_turn(self, client):
+        """SC-3: dual-store sync — one /chat turn → JSONL lines == SQLite event rows."""
+        import sqlite3
+        from gateway.settings import settings
+
+        response = client.post(
+            "/chat",
+            json={"messages": [{"role": "user", "content": "dual sync test"}]},
+        )
+        assert response.status_code == 200
+        cid = response.json()["conversation_id"]
+
+        # SQLite count
+        conn = sqlite3.connect(settings.sqlite_db_path)
+        sqlite_count = conn.execute(
+            "SELECT COUNT(*) FROM events WHERE conversation_id=?", (cid,)
+        ).fetchone()[0]
+        conn.close()
+
+        # JSONL count
+        jsonl_count = 0
+        with open(settings.jsonl_audit_path, "r", encoding="utf-8") as f:
+            for line in f:
+                stripped = line.strip()
+                if stripped:
+                    import json as _json
+                    event = _json.loads(stripped)
+                    if event.get("conversation_id") == cid:
+                        jsonl_count += 1
+
+        assert jsonl_count == sqlite_count, (
+            f"JSONL lines ({jsonl_count}) != SQLite events ({sqlite_count}) "
+            f"— dual-store sync broken (SC-3)"
+        )
+        assert sqlite_count == 4, f"Expected 4 events for a successful turn, got {sqlite_count}"
+
+
 class TestEventSinkValidation:
 
     def test_missing_event_id_raises_value_error(self, tmp_path):
