@@ -76,6 +76,7 @@ Every AI prompt and response is captured, classified, and — when high-severity
 - Data layer: SQLite (state) + JSONL (append-only SIEM events). No vector store.
 - Skill is the governance *contract*; gateway is the enforcement *boundary*. Skills alone cannot enforce capture/block/pause — all clients must route through the gateway.
 - Audience for the UI: non-technical safety & ethics administrator. Plain-language category grouping with raw classifier payload in an expandable technical section.
+- **Governance skill already installed**: `.claude/skills/ai-safety-siem-logger/SKILL.md` (v1.0). It is the authoritative source for the canonical event-type names (`prompt.received`, `prompt.classification.completed`, `approval.requested`, `approval.redacted_resumed`, `response.blocked`, etc.), the operating principles (route through gateway, classify before proceeding, pause high-severity, fail closed when guard unavailable), and the local architecture assumptions. The gateway's event schema (AUDIT-01) and taxonomy (CLASS-05) must conform to this contract; SKILL-01 is largely pre-satisfied by this file and primarily needs verification/integration rather than authoring.
 
 ## Constraints
 
