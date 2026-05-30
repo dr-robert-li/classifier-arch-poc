@@ -20,6 +20,7 @@ from fastapi import FastAPI
 from gateway.adapters.ollama_assistant import OllamaAssistantAdapter
 from gateway.audit.event_sink import EventSink
 from gateway.routes.chat import router as chat_router
+from gateway.routes.events import router as events_router
 from gateway.routes.health import router as health_router
 from gateway.routes.stubs import router as stubs_router
 from gateway.settings import settings
@@ -74,5 +75,6 @@ app = FastAPI(
 
 # Mount routers
 app.include_router(chat_router)
+app.include_router(events_router)
 app.include_router(health_router)
 app.include_router(stubs_router)
