@@ -1,10 +1,12 @@
 """
-Stub routes for Phase 2-4 endpoints (GATE-05).
+Stub routes for Phase 3-4 endpoints (GATE-05).
 
 All routes return HTTP 501 Not Implemented. Their presence establishes the full
 route surface so later phases can implement them without restructuring the API.
 
-Phase 2: /classify/prompt, /classify/response
+Phase 2 stubs removed: /classify/prompt and /classify/response are now implemented
+in gateway/routes/classify.py and mounted via classify_router in gateway/main.py.
+
 Phase 3: /approvals, /approvals/{id}/approve, /approvals/{id}/reject,
           /approvals/{id}/redact-resume, /policy, /export/jsonl
 """
@@ -17,18 +19,6 @@ _NOT_IMPLEMENTED = JSONResponse(
     status_code=501,
     content={"detail": "Not implemented — planned for a future phase."},
 )
-
-
-@router.post("/classify/prompt")
-async def classify_prompt() -> JSONResponse:
-    """Phase 2: Classify an inbound prompt using Llama Guard 3 + DLP scanner."""
-    return _NOT_IMPLEMENTED
-
-
-@router.post("/classify/response")
-async def classify_response() -> JSONResponse:
-    """Phase 2: Classify an assistant response using Llama Guard 3 + DLP scanner."""
-    return _NOT_IMPLEMENTED
 
 
 @router.get("/approvals")
