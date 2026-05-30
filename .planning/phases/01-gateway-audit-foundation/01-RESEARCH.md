@@ -445,6 +445,38 @@ def make_message_id(conversation_id: str, turn_index: int, direction: str) -> st
 The client supplies `conversation_id` (or the gateway generates one per session and returns
 it). `turn_index` is the 0-based count of turns in that conversation, stored in SQLite.
 
+**Critical for retry idempotency:** `turn_index` must not advance on a failed turn.
+The rule: `turn_index` = the number of *completed* response rows in SQLite for this
+conversation (i.e., `SELECT COUNT(*) FROM messages WHERE conversation_id=? AND direction='response'`).
+A failed turn (where no response row was written) leaves `turn_index` unchanged, so a
+retry computes the same `message_id` and the same `event_id` — and `INSERT OR IGNORE`
+correctly deduplicates the `prompt.received` event.
+
+**The gateway response body (both 200 and 503) MUST include `conversation_id` and `message_id`**
+so a well-behaved client can supply them on retry:
+
+```python
+# HTTP 200 success response body
+{
+    "conversation_id": "<uuid>",
+    "message_id": "<uuid5-of-response>",
+    "response": "<assistant content>",
+    "model": "<model name>"
+}
+
+# HTTP 503 error response body (REL-03)
+{
+    "conversation_id": "<uuid>",
+    "message_id": "<uuid5-of-prompt>",
+    "error": "assistant model unavailable",
+    "audited": true
+}
+```
+
+Without `message_id` in the 503 body, a retrying client has no stable key to supply and
+the gateway will recompute `turn_index` from an already-written message row — causing
+`turn_index` to advance and breaking idempotency on the retry.
+
 ### Dual-Write Gate: SQLite is the Idempotency Gate for JSONL
 
 ```python
@@ -677,6 +709,21 @@ def _append_jsonl(self, event: dict) -> None:
 Note: `fcntl` is POSIX-only (macOS/Linux). This is acceptable for the local POC which runs
 on macOS (Darwin 25.2.0).
 
+### correlation_id Definition
+
+`correlation_id` is a **per-turn UUID4** generated fresh at the start of each `/chat`
+request (not the same as `conversation_id`). It ties together all events emitted during
+a single request/response cycle — `prompt.received`, `llm.request.started`,
+`llm.response.generated`, and `response.delivered` all share the same `correlation_id`.
+On a retry, a new `correlation_id` is generated (because it is a new HTTP request), but
+the `event_id` deduplication still works because that is derived from the stable
+`(conversation_id, message_id, event_type)` tuple. `correlation_id` is not used for
+deduplication — only for log correlation across events of the same turn.
+
+```python
+correlation_id = str(uuid.uuid4())  # fresh per /chat request
+```
+
 ### Complete Phase 1 Event Example (`prompt.received`)
 
 ```json
@@ -871,8 +918,9 @@ using opposite order), JSONL has events that SQLite doesn't, or vice versa.
 | sqlite3 (stdlib) | Audit data layer | Yes | 3.51.2 | — |
 | Ollama | Model serving | Yes | 0.22.1 | — |
 | llama-guard3:latest | Guard model (Phase 2) | Yes | 8B Q4_K_M | — |
-| gpt-oss:latest | Assistant model (configurable) | Yes | — | Configure any available model |
-| mistral-small3.2:latest | Assistant model alt | Yes | — | — |
+| llama3.1:latest | Default assistant model (`OLLAMA_ASSISTANT_MODEL`) | Yes | 8.0B llama | — |
+| gpt-oss:latest | Assistant alt (20.9B) | Yes | — | — |
+| mistral-small3.2:latest | Assistant alt (24.0B) | Yes | — | — |
 | pytest | Test runner | No | 9.0.3 (PyPI) | Install: `pip install pytest==9.0.3` |
 | aiosqlite | Async SQLite | No | N/A | NOT NEEDED — use stdlib sqlite3 |
 
