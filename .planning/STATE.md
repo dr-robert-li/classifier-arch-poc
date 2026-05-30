@@ -56,7 +56,9 @@ None yet.
 
 ### Blockers/Concerns
 
-- GSD subagents not installed for this runtime — research/plan-check/verifier agents will fail to spawn until `npx get-shit-done-cc@latest --global` is run. Roadmap was generated inline.
+- Runtime requires Ollama running locally with the assistant model + Llama Guard 3 pre-pulled (per scoping decision). Execution/validation of classification phases depends on this being live.
+
+(Note: init's `agents_installed: false` was a false negative — all GSD subagents are present in ~/.claude/agents/ and resolvable. Roadmap was generated inline but plan/execute/verify agents are available.)
 
 ## Deferred Items
 
