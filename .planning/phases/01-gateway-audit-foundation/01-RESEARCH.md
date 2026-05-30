@@ -253,7 +253,11 @@ class IAssistantAdapter(Protocol):
 
 class IEventSink(Protocol):
     def write_event(self, event: dict) -> bool:
-        """Write event. Returns True if new row created, False if duplicate. Never raises."""
+        """Write event. True = new row created (JSONL appended); False = genuine
+        primary-key duplicate (JSONL skipped). Raises on a missing/None mandatory
+        field (caller contract violation: event_id, event_type, conversation_id,
+        message_id, timestamp, actor_type, actor_id, payload). Does NOT raise on
+        SQLite/IO errors (logs and returns False)."""
         ...
 
 # In tests:
@@ -481,17 +485,72 @@ the gateway will recompute `turn_index` from an already-written message row — 
 
 ```python
 # Source: verified on sqlite3 3.51.2 / Python 3.14.2
+
+# Every column the `events` DDL declares NOT NULL with no usable default must be
+# supplied by write_event. The DDL's NOT NULL set is:
+#   event_id, event_type, conversation_id, message_id, timestamp,
+#   actor_type, actor_id, payload
+# (severity is NOT NULL DEFAULT 'none', so it may be omitted.)
+MANDATORY_EVENT_FIELDS = (
+    "event_id", "event_type", "conversation_id", "message_id",
+    "timestamp", "actor_type", "actor_id", "payload",
+)
+
 def write_event(self, event: dict) -> bool:
     """
-    Returns True if event is new (write JSONL), False if duplicate (skip JSONL).
-    Never raises. On SQLite error, logs and returns False.
+    Dual-write gate. Returns True if a NEW events row was created (and the event
+    was appended to JSONL), False if the row was a genuine PRIMARY-KEY duplicate
+    (same event_id already present — JSONL is correctly skipped).
+
+    Contract:
+    - RAISES on a missing or None mandatory field (caller contract violation:
+      event_id, event_type, conversation_id, message_id, timestamp,
+      actor_type, actor_id, payload). This makes a constraint violation LOUD
+      instead of letting INSERT OR IGNORE swallow it as a silent audit-loss
+      (returning False as if it were a duplicate). The caller — build_event in
+      the chat route — is expected to always populate these, so a raise here is
+      a real bug surfacing, not an expected runtime condition.
+    - Does NOT raise on SQLite/IO errors (e.g., disk error, JSONL write failure):
+      logs and returns False. Operational faults degrade gracefully.
+    - True  => brand-new row, JSONL appended.
+    - False => genuine primary-key duplicate (INSERT OR IGNORE no-op), JSONL skipped.
+
+    Because all NOT NULL columns are validated and supplied before the INSERT,
+    `INSERT OR IGNORE` can ONLY suppress a real event_id primary-key duplicate —
+    never a NOT NULL or FK violation. (FK integrity is the caller's job: the
+    referenced messages row must be inserted before any event that references it;
+    see "Capture Order for /chat".)
     """
+    # Mandatory-field validation BEFORE the INSERT so OR IGNORE only ever
+    # suppresses genuine PK duplicates, not constraint violations.
+    actor = event.get("actor") or {}
+    actor_type = actor.get("type")
+    actor_id = actor.get("id")
+    flat = {
+        "event_id": event.get("event_id"),
+        "event_type": event.get("event_type"),
+        "conversation_id": event.get("conversation_id"),
+        "message_id": event.get("message_id"),
+        "timestamp": event.get("timestamp"),
+        "actor_type": actor_type,
+        "actor_id": actor_id,
+        # payload is the serialized event; presence implied by the event dict itself
+    }
+    missing = [k for k, v in flat.items() if v is None]
+    if missing:
+        raise ValueError(
+            f"write_event: mandatory NOT NULL field(s) missing/None: {missing} "
+            f"(event_type={event.get('event_type')!r})"
+        )
+
     try:
         cur = self._conn.execute(
             "INSERT OR IGNORE INTO events (event_id, event_type, conversation_id, "
-            "message_id, timestamp, payload) VALUES (?, ?, ?, ?, ?, ?)",
+            "message_id, timestamp, actor_type, actor_id, payload) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (event["event_id"], event["event_type"], event["conversation_id"],
-             event["message_id"], event["timestamp"], json.dumps(event))
+             event["message_id"], event["timestamp"], actor_type, actor_id,
+             json.dumps(event))
         )
         self._conn.commit()
         is_new = cur.rowcount == 1
@@ -499,9 +558,19 @@ def write_event(self, event: dict) -> bool:
             self._append_jsonl(event)  # only on new row
         return is_new
     except Exception as e:
-        logger.error("Event write failed: %s", e)
+        # SQLite/IO faults only — NOT mandatory-field violations (those raised above).
+        logger.error("Event write failed (operational): %s", e)
         return False
 ```
+
+The INSERT column list above MUST name the same NOT NULL columns the `events`
+DDL declares (event_id, event_type, conversation_id, message_id, timestamp,
+**actor_type, actor_id**, payload). Omitting `actor_type`/`actor_id` — both
+`TEXT NOT NULL` with no default — would make every INSERT a NOT NULL violation
+that `INSERT OR IGNORE` silently suppresses (rowcount 0, no JSONL, no exception),
+dropping every audit event. `actor_type`/`actor_id` are sourced from
+`event["actor"]["type"]` and `event["actor"]["id"]`, which `build_event`
+populates for every Phase 1 event type.
 
 **Known POC limitation:** If the process crashes between the SQLite commit and the JSONL
 write, the two stores diverge for that event. This is an acceptable consistency gap for a
@@ -784,31 +853,73 @@ call. Only then is the "attempt is still audited" criterion satisfied.
 
 ### Capture Order for /chat
 
+**FK-safety invariant (load-bearing):** `events.message_id` is
+`NOT NULL REFERENCES messages(message_id)` and `foreign_keys=ON` enforces this
+*immediately* (the constraint is not DEFERRABLE). Therefore the `messages` row a
+given event references MUST be inserted (and committed) **before** that event is
+written. Otherwise the FK fails and `INSERT OR IGNORE` silently discards the
+event (rowcount 0, no JSONL, no exception) — a silent audit loss. This applies on
+BOTH sides:
+- `prompt.received`, `llm.request.started` reference the **prompt** message_id ->
+  the prompt `messages` row must exist first.
+- `llm.response.generated`, `response.delivered` reference the **response**
+  message_id (`make_message_id(conversation_id, turn_index, 'response')`) -> the
+  response `messages` row must exist first.
+
+The prompt `messages` row plus `prompt.received` are still both written BEFORE the
+Ollama call, so the REL-03 durability guarantee ("the attempt is audited before
+generation") and Pitfall 3 both still hold.
+
 ```
-1. Parse and validate request
-2. Resolve or create conversation_id
-3. Compute message_id (stable, from conversation_id + turn_index)
-4. Compute event_id for prompt.received (uuid5)
-5. Write prompt.received event -> SQLite + JSONL  [DURABLE]
-6. Write message row -> SQLite (direction='prompt')
-7. Write llm.request.started event
-8. Call OllamaAssistantAdapter.chat(messages)
-   - If ConnectError: write system.error event; return HTTP 503 {"error": "assistant model unavailable", "audited": true}
-   - If HTTP 404 from Ollama: write system.error event; return HTTP 503
-   - If TimeoutException: write system.error event; return HTTP 503
-9. Write llm.response.generated event
-10. Write message row (direction='response')
-11. Write response.delivered event
-12. Return HTTP 200 with response content
+1.  Parse and validate request
+2.  Resolve or create conversation_id (UUID4 if absent); upsert conversations row
+3.  Compute turn_index = COUNT(*) of COMPLETED response rows for this conversation
+4.  Compute prompt message_id = make_message_id(conversation_id, turn_index, 'prompt')
+5.  Compute response message_id = make_message_id(conversation_id, turn_index, 'response')
+6.  Generate fresh per-request correlation_id (uuid4)
+7.  Insert PROMPT messages row -> SQLite (direction='prompt') [INSERT OR IGNORE]  [DURABLE]
+8.  Write prompt.received event -> SQLite + JSONL (references prompt message_id)  [DURABLE]
+9.  Write llm.request.started event (references prompt message_id)
+10. Call OllamaAssistantAdapter.chat(messages)
+    - If ConnectError: write system.error (references prompt message_id); HTTP 503
+      {"conversation_id", "message_id": <prompt message_id>,
+       "error": "assistant model unavailable", "audited": true}
+    - If HTTP 404 from Ollama (model not found): write system.error; HTTP 503 (NOT 404)
+    - If TimeoutException: write system.error; HTTP 503
+11. Insert RESPONSE messages row -> SQLite (direction='response') [INSERT OR IGNORE]
+    — committed BEFORE the next two events that reference it
+12. Write llm.response.generated event (references response message_id)
+13. Write response.delivered event (references response message_id)
+14. Return HTTP 200 {"conversation_id", "message_id": <response message_id>,
+    "response": <content>, "model": <model>}
 ```
+
+**Why response message row before response events (BLOCKER 2 fix):** Steps 12–13
+carry the *response* message_id. If they were written before step 11, the FK from
+`events.message_id` to the not-yet-inserted response `messages` row would fail and
+`INSERT OR IGNORE` would drop both events silently. Insert the response row first.
+
+**Why prompt message row before prompt events:** Same mechanism — steps 8–9 carry
+the *prompt* message_id, so the prompt `messages` row (step 7) must precede them.
+
+**Message-row inserts use `INSERT OR IGNORE`** so that a retry of a failed turn
+(turn_index unchanged -> same `(conversation_id, turn_index, direction)` UNIQUE
+key) does not raise on the re-inserted prompt row; it is a no-op, and the stable
+event_id then dedupes the `prompt.received` event. The message-row helper must
+supply all NOT NULL columns: message_id, conversation_id, turn_index, direction,
+content_sha256, created_at.
 
 ### system.error Event Shape
 
 ```python
 system_error_event = {
-    "event_id": make_event_id(conversation_id, message_id, "system.error"),
+    # references the PROMPT message_id (the prompt messages row already exists,
+    # step 7 of the capture order) so the FK is satisfied and the event lands.
+    "event_id": make_event_id(conversation_id, prompt_message_id, "system.error"),
     "event_type": "system.error",
-    # ... standard fields ...
+    "message_id": prompt_message_id,
+    "actor": {"type": "system", "id": "local-ai-safety-gateway"},
+    # ... other standard fields (timestamp, correlation_id, model, ...) ...
     "content": {
         "direction": "prompt",
         "text_sha256": prompt_sha256,
@@ -818,6 +929,13 @@ system_error_event = {
     # classification/policy/approval/siem defaults as above
 }
 ```
+
+Note: `actor` is populated here (type `system`) — as it must be for every Phase 1
+event — because `write_event` now requires `actor_type`/`actor_id` (sourced from
+`event["actor"]`) and raises if they are missing. `build_event` is responsible for
+filling `actor` on every event: `user` for `prompt.received`, `system` for
+`llm.request.started` / `system.error`, `assistant` for `llm.response.generated` /
+`response.delivered`.
 
 ---
 
@@ -996,9 +1114,13 @@ def client(tmp_path):
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Conversation history scope for Ollama calls**
+   - RESOLVED: `include_history` defaults to `False` — Phase 1 `/chat` sends only the
+     current user message to Ollama (no accumulated history). The `/chat` request body
+     carries `include_history: bool = False` so history replay can be added as a follow-on
+     without an interface change. Implemented in plans 01-01 (Task 2) and 01-02.
    - What we know: The gateway has `conversation_id` and accumulates messages in SQLite.
    - What's unclear: Does `/chat` send only the latest user message to Ollama, or does it
      send accumulated history? Sending history enables multi-turn coherence but grows the
@@ -1008,6 +1130,10 @@ def client(tmp_path):
      history replay as a follow-on.
 
 2. **`conversation_id` assignment**
+   - RESOLVED: `conversation_id` is an OPTIONAL field in the `/chat` request body. If absent,
+     the gateway generates a UUID4, uses it for the turn, and returns it in the response
+     (both 200 and 503 bodies) so the client can reuse it on follow-up turns. Implemented in
+     plans 01-01 (Task 2) and 01-02.
    - What we know: SKILL.md schema requires a `conversation_id` on every event.
    - What's unclear: Should the client supply it, or should the gateway generate and return
      it? If the client doesn't send one, the gateway can generate a UUID4 per-request
