@@ -1,0 +1,35 @@
+# Virtual environment
+.venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+
+# SQLite database files (runtime audit data)
+*.db
+*.db-wal
+*.db-shm
+
+# JSONL audit logs (contain raw prompts/responses — sensitive)
+*.jsonl
+
+# Runtime data directory
+data/
+
+# Environment files (may contain secrets)
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Test artifacts
+.pytest_cache/
+htmlcov/
+.coverage
