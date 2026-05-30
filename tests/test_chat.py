@@ -260,3 +260,137 @@ def test_chat_model_unavailable_returns_503_with_audit(unavailable_client, tmp_p
     assert "prompt.received" in event_types, (
         f"prompt.received not found in events — REL-03 violated. Got: {event_types}"
     )
+
+
+def test_chat_model_unavailable_writes_system_error_event(unavailable_client):
+    """
+    REL-03 / SC-5: On adapter failure the gateway writes a system.error event in
+    addition to prompt.received — the attempt is fully audited.
+    No response-direction messages row and no llm.response.generated event are written.
+    """
+    import sqlite3
+    from gateway.settings import settings
+
+    response = unavailable_client.post(
+        "/chat",
+        json={"messages": [{"role": "user", "content": "system error test"}]},
+    )
+    assert response.status_code == 503
+    cid = response.json()["conversation_id"]
+
+    conn = sqlite3.connect(settings.sqlite_db_path)
+    conn.row_factory = sqlite3.Row
+
+    event_types = {
+        row[0]
+        for row in conn.execute(
+            "SELECT event_type FROM events WHERE conversation_id=?", (cid,)
+        ).fetchall()
+    }
+
+    # system.error MUST be present — the failure is fully audited
+    assert "system.error" in event_types, (
+        f"system.error event missing after 503 — REL-03 violation. Got: {event_types}"
+    )
+
+    # No response-direction messages row written on failure
+    resp_msg_count = conn.execute(
+        "SELECT COUNT(*) FROM messages WHERE conversation_id=? AND direction='response'",
+        (cid,),
+    ).fetchone()[0]
+    assert resp_msg_count == 0, (
+        f"Expected 0 response messages on failure path, got {resp_msg_count}"
+    )
+
+    # No llm.response.generated event (no response was generated)
+    assert "llm.response.generated" not in event_types, (
+        f"llm.response.generated should NOT be present on failure path: {event_types}"
+    )
+
+    conn.close()
+
+
+def test_chat_retry_failed_turn_does_not_duplicate_events(unavailable_client):
+    """
+    SC-4 / AUDIT-04: Retrying a failed turn (same conversation_id) produces NO
+    duplicate prompt.received or system.error events.
+
+    Idempotency mechanism:
+    - turn_index = COUNT of COMPLETED response rows (failure leaves 0 responses)
+    - retry recomputes the same prompt_message_id → same event_id
+    - INSERT OR IGNORE deduplicates; rowcount stays 1; JSONL stays 1 line
+
+    After two 503 responses for the same conversation_id:
+    - prompt.received rowcount in SQLite == 1 (not 2)
+    - system.error rowcount in SQLite == 1 (not 2)
+    - JSONL lines for that prompt event_id == 1 (not 2)
+    """
+    import sqlite3
+    from gateway.audit.ids import make_message_id, make_event_id
+    from gateway.settings import settings
+
+    cid = "retry-idem-conv-001"
+    content = "retry idempotency trigger"
+
+    # First attempt
+    r1 = unavailable_client.post(
+        "/chat",
+        json={"conversation_id": cid, "messages": [{"role": "user", "content": content}]},
+    )
+    assert r1.status_code == 503
+    body1 = r1.json()
+    assert body1["conversation_id"] == cid
+    prompt_message_id = body1["message_id"]
+
+    # Second attempt (same conversation_id — the retry)
+    r2 = unavailable_client.post(
+        "/chat",
+        json={"conversation_id": cid, "messages": [{"role": "user", "content": content}]},
+    )
+    assert r2.status_code == 503
+    body2 = r2.json()
+    # Retry body must carry same conversation_id and same prompt message_id
+    assert body2["conversation_id"] == cid
+    assert body2["message_id"] == prompt_message_id, (
+        f"Retry should return the same prompt message_id "
+        f"(got {body2['message_id']} != {prompt_message_id})"
+    )
+
+    # Inspect SQLite — each event_id must appear exactly once
+    conn = sqlite3.connect(settings.sqlite_db_path)
+    conn.row_factory = sqlite3.Row
+
+    pr_count = conn.execute(
+        "SELECT COUNT(*) FROM events WHERE conversation_id=? AND event_type='prompt.received'",
+        (cid,),
+    ).fetchone()[0]
+    assert pr_count == 1, (
+        f"prompt.received must appear exactly once after retry, got {pr_count} rows "
+        f"(idempotency gate broken — INSERT OR IGNORE failed to deduplicate)"
+    )
+
+    se_count = conn.execute(
+        "SELECT COUNT(*) FROM events WHERE conversation_id=? AND event_type='system.error'",
+        (cid,),
+    ).fetchone()[0]
+    assert se_count == 1, (
+        f"system.error must appear exactly once after retry, got {se_count} rows"
+    )
+
+    # Also verify JSONL has exactly 1 line for the prompt event_id
+    prompt_event_id = make_event_id(cid, prompt_message_id, "prompt.received")
+    jsonl_path = settings.jsonl_audit_path
+    jsonl_count = 0
+    with open(jsonl_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                import json as _json
+                event = _json.loads(line)
+                if event.get("event_id") == prompt_event_id:
+                    jsonl_count += 1
+    assert jsonl_count == 1, (
+        f"JSONL must have exactly 1 line for prompt event_id after retry, got {jsonl_count}"
+    )
+
+    conn.close()
