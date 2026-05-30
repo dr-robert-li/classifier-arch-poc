@@ -35,7 +35,11 @@ FIXTURES = [
 
 
 def main():
-    c = httpx.Client(base_url=BASE, timeout=180.0)
+    # Admin token (matches gateway default GATEWAY_ADMIN_TOKEN). Override via env for non-default.
+    import os
+    token = os.environ.get("GATEWAY_ADMIN_TOKEN", "admin-local-dev-token")
+    c = httpx.Client(base_url=BASE, timeout=180.0,
+                     headers={"Authorization": f"Bearer {token}"})
     # wait for gateway
     for _ in range(40):
         try:

@@ -104,10 +104,10 @@ def test_chat_writes_exactly_1_conversation_2_messages_4_events(client, tmp_path
     event_count = conn.execute(
         "SELECT COUNT(*) FROM events WHERE conversation_id=?", (cid,)
     ).fetchone()[0]
-    assert event_count == 4, (
-        f"Expected exactly 4 events, got {event_count}. "
-        f"If 2, the response messages row was inserted AFTER the response events "
-        f"(BLOCKER 2 FK-drop regression)."
+    assert event_count == 8, (
+        f"Expected exactly 8 events, got {event_count}. "
+        f"8 = prompt.received, prompt.classification.started/completed, llm.request.started, "
+        f"llm.response.generated, response.classification.started/completed, response.delivered."
     )
 
     # All four event_types present
@@ -119,8 +119,12 @@ def test_chat_writes_exactly_1_conversation_2_messages_4_events(client, tmp_path
     }
     expected_types = {
         "prompt.received",
+        "prompt.classification.started",
+        "prompt.classification.completed",
         "llm.request.started",
         "llm.response.generated",
+        "response.classification.started",
+        "response.classification.completed",
         "response.delivered",
     }
     assert event_types == expected_types, f"Event types mismatch: {event_types}"
@@ -131,8 +135,8 @@ def test_chat_writes_exactly_1_conversation_2_messages_4_events(client, tmp_path
     jsonl_path = settings.jsonl_audit_path
     with open(jsonl_path, "r", encoding="utf-8") as f:
         lines = [line.strip() for line in f if line.strip()]
-    assert len(lines) == 4, (
-        f"Expected 4 JSONL lines, got {len(lines)}. "
+    assert len(lines) == 8, (
+        f"Expected 8 JSONL lines, got {len(lines)}. "
         f"JSONL and SQLite event counts must match."
     )
 

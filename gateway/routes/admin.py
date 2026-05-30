@@ -17,10 +17,12 @@ released (optionally redacted). Every action persists an admin_actions row + an 
 import json
 import uuid
 
-from fastapi import APIRouter, Request, Query
+from fastapi import APIRouter, Request, Query, Depends
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from gateway.audit.schema import build_event
+from gateway.auth import require_admin, require_user
+from gateway.routes.chat import get_assistant_adapter
 from gateway import governance
 
 router = APIRouter()
@@ -59,11 +61,10 @@ def _emit_admin_event(sink, settings, *, event_type, ctx, text, classification=N
     return ev
 
 
-async def _generate_and_deliver(request, ctx, *, messages, redacted=False):
+async def _generate_and_deliver(request, ctx, *, messages, adapter, redacted=False):
     """Prompt-side resume: run the model now and deliver (used by approve / redact-resume / FP)."""
     sink = request.app.state.event_sink
     settings = request.app.state.settings
-    adapter = request.app.state.assistant_adapter
     result = await adapter.chat(messages)
     response_text = result["content"]
     from datetime import datetime, timezone
@@ -88,13 +89,13 @@ async def _generate_and_deliver(request, ctx, *, messages, redacted=False):
 
 
 @router.get("/approvals")
-async def list_approvals(request: Request, status: str | None = Query(default=None)):
+async def list_approvals(request: Request, status: str | None = Query(default=None), _role: str = Depends(require_user)):
     conn = request.app.state.event_sink._conn
     return governance.list_approvals(conn, status)
 
 
 @router.post("/approvals/{approval_id}/approve")
-async def approve(approval_id: str, request: Request):
+async def approve(approval_id: str, request: Request, _role: str = Depends(require_admin), assistant=Depends(get_assistant_adapter)):
     ctx, err = _ctx_or_404(request, approval_id)
     if err:
         return err
@@ -103,7 +104,7 @@ async def approve(approval_id: str, request: Request):
     conn = sink._conn
     delivered = None
     if ctx["side"] == "prompt":
-        delivered = await _generate_and_deliver(request, ctx, messages=ctx["messages_for_ollama"])
+        delivered = await _generate_and_deliver(request, ctx, messages=ctx["messages_for_ollama"], adapter=assistant)
     else:
         sink.write_event(build_event(
             event_type="response.delivered", conversation_id=ctx["conversation_id"],
@@ -122,7 +123,7 @@ async def approve(approval_id: str, request: Request):
 
 
 @router.post("/approvals/{approval_id}/reject")
-async def reject(approval_id: str, request: Request):
+async def reject(approval_id: str, request: Request, _role: str = Depends(require_admin)):
     ctx, err = _ctx_or_404(request, approval_id)
     if err:
         return err
@@ -143,7 +144,7 @@ async def reject(approval_id: str, request: Request):
 
 
 @router.post("/approvals/{approval_id}/redact-resume")
-async def redact_resume(approval_id: str, request: Request):
+async def redact_resume(approval_id: str, request: Request, _role: str = Depends(require_admin), assistant=Depends(get_assistant_adapter)):
     ctx, err = _ctx_or_404(request, approval_id)
     if err:
         return err
@@ -156,7 +157,7 @@ async def redact_resume(approval_id: str, request: Request):
         msgs = list(ctx["messages_for_ollama"])
         if msgs:
             msgs[-1] = {**msgs[-1], "content": redacted_text}
-        delivered = await _generate_and_deliver(request, ctx, messages=msgs, redacted=True)
+        delivered = await _generate_and_deliver(request, ctx, messages=msgs, adapter=assistant, redacted=True)
         ev_id = ctx["event_id"]
     else:
         original = ctx["response_text"]
@@ -188,7 +189,7 @@ async def redact_resume(approval_id: str, request: Request):
 
 
 @router.post("/approvals/{approval_id}/false-positive")
-async def false_positive(approval_id: str, request: Request):
+async def false_positive(approval_id: str, request: Request, _role: str = Depends(require_admin), assistant=Depends(get_assistant_adapter)):
     ctx, err = _ctx_or_404(request, approval_id)
     if err:
         return err
@@ -197,7 +198,7 @@ async def false_positive(approval_id: str, request: Request):
     conn = sink._conn
     delivered = None
     if ctx["side"] == "prompt":
-        delivered = await _generate_and_deliver(request, ctx, messages=ctx["messages_for_ollama"])
+        delivered = await _generate_and_deliver(request, ctx, messages=ctx["messages_for_ollama"], adapter=assistant)
     else:
         sink.write_event(build_event(
             event_type="response.delivered", conversation_id=ctx["conversation_id"],
@@ -219,7 +220,7 @@ async def false_positive(approval_id: str, request: Request):
 
 
 @router.post("/approvals/{approval_id}/escalate")
-async def escalate(approval_id: str, request: Request):
+async def escalate(approval_id: str, request: Request, _role: str = Depends(require_admin)):
     ctx, err = _ctx_or_404(request, approval_id)
     if err:
         return err
@@ -236,12 +237,12 @@ async def escalate(approval_id: str, request: Request):
 
 
 @router.get("/policy")
-async def get_policy(request: Request):
+async def get_policy(request: Request, _role: str = Depends(require_user)):
     return {**governance.POLICY, "category_labels": governance.CATEGORY_LABELS}
 
 
 @router.get("/export/jsonl")
-async def export_jsonl(request: Request, mode: str = Query(default="raw")):
+async def export_jsonl(request: Request, mode: str = Query(default="raw"), _role: str = Depends(require_admin)):
     """Export the append-only audit log. mode=redacted strips text previews."""
     settings = request.app.state.settings
     path = settings.jsonl_audit_path

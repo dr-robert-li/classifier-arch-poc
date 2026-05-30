@@ -55,6 +55,7 @@
 <header>
   <h1>🛡️ AI Safety SIEM Gateway</h1>
   <span class="sub">local-first prompt/response governance · POC</span>
+  <label class="sub" style="margin-left:auto">token <input id="token" size="22" style="font-size:12px" title="admin-local-dev-token = full admin; user-local-dev-token = chat only"/></label>
   <span id="health"><span class="dot"></span>checking…</span>
 </header>
 <nav>
@@ -142,6 +143,17 @@
 
 </main>
 <script>
+// Auth: inject the bearer token on every same-origin API call. Default is the admin token
+// so the console has full access; switch to the user token to demo the chat-only role.
+let TOKEN = localStorage.getItem('gw_token') || 'admin-local-dev-token';
+const _fetch = window.fetch.bind(window);
+window.fetch = (url, opts = {}) => {
+  if (typeof url === 'string' && url.startsWith('/')) {
+    opts = {...opts, headers: {...(opts.headers || {}), 'Authorization': 'Bearer ' + TOKEN}};
+  }
+  return _fetch(url, opts);
+};
+
 const FIXTURES = {
   safe:    "In one short sentence, what is a SIEM?",
   secret:  "Please store my OpenAI key sk-abcd1234EFGH5678ijkl9012MNOP3456qrst and my AWS key AKIAIOSFODNN7EXAMPLE for later.",
@@ -292,6 +304,10 @@ async function doExport(mode){
 $('#exp-raw').onclick = ()=>doExport('raw');
 $('#exp-red').onclick = ()=>doExport('redacted');
 $('#exp-dl').onclick = ()=>{ if(!lastExport) return; const b=new Blob([lastExport],{type:'application/x-ndjson'}); const u=URL.createObjectURL(b); const a=document.createElement('a'); a.href=u; a.download='audit-export.jsonl'; a.click(); URL.revokeObjectURL(u); };
+
+// token control
+const tokEl = $('#token'); tokEl.value = TOKEN;
+tokEl.onchange = ()=>{ TOKEN = tokEl.value.trim(); localStorage.setItem('gw_token', TOKEN); health(); loadPolicy(); };
 
 // boot
 health(); loadPolicy(); setInterval(health, 8000);

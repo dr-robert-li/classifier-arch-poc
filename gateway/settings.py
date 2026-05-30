@@ -28,5 +28,12 @@ class Settings(BaseSettings):
     gateway_host: str = "127.0.0.1"
     gateway_port: int = 8000
 
+    # Simple local authentication (CLAUDE.md: "admin routes require at least simple local
+    # authentication"; "separate administrator actions from normal chat actions").
+    # Two tokens give a lightweight admin/user separation. Override in .env for anything real.
+    gateway_auth_enabled: bool = True
+    gateway_admin_token: str = "admin-local-dev-token"
+    gateway_user_token: str = "user-local-dev-token"
+
 
 settings = Settings()

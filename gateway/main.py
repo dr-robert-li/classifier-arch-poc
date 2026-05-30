@@ -90,10 +90,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Mount routers
-app.include_router(chat_router)
-app.include_router(classify_router)
-app.include_router(events_router)
+# Mount routers. Auth: chat/classify/events require a user-or-admin token (router-level);
+# admin routes enforce admin-only per-route (see gateway/routes/admin.py). /health + / are open.
+from fastapi import Depends
+from gateway.auth import require_user
+
+app.include_router(chat_router, dependencies=[Depends(require_user)])
+app.include_router(classify_router, dependencies=[Depends(require_user)])
+app.include_router(events_router, dependencies=[Depends(require_user)])
 app.include_router(health_router)
 app.include_router(admin_router)
 app.include_router(stubs_router)

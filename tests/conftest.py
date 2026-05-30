@@ -249,3 +249,18 @@ def client_guard_unavailable_scanner_low(tmp_path):
         yield c
 
     app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# Auth: disabled by default for the existing suite (endpoints exercised without a
+# token). test_auth.py re-enables it explicitly to verify 401/403/200 behaviour.
+# ---------------------------------------------------------------------------
+import gateway.settings as _settings_mod
+
+
+@pytest.fixture(autouse=True)
+def _auth_disabled_by_default():
+    prev = _settings_mod.settings.gateway_auth_enabled
+    _settings_mod.settings.gateway_auth_enabled = False
+    yield
+    _settings_mod.settings.gateway_auth_enabled = prev

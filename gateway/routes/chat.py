@@ -30,6 +30,7 @@ from gateway.adapters.protocols import IAssistantAdapter
 from gateway.audit.ids import make_message_id
 from gateway.audit.schema import build_event
 from gateway.classification.orchestrator import classify_text
+from gateway.routes.classify import get_guard_adapter, get_scanner_adapter
 from gateway import governance
 
 router = APIRouter()
@@ -77,14 +78,14 @@ async def chat(
     body: ChatRequest,
     request: Request,
     adapter: IAssistantAdapter = Depends(get_assistant_adapter),
+    guard_adapter=Depends(get_guard_adapter),
+    scanner_adapter=Depends(get_scanner_adapter),
 ):
     """Route a chat turn through the gateway with capture, classification, and pause."""
     from gateway.adapters.ollama_assistant import OllamaUnavailableError
 
     sink = request.app.state.event_sink
     settings = request.app.state.settings
-    guard_adapter = request.app.state.guard_adapter
-    scanner_adapter = request.app.state.scanner_adapter
     pending = request.app.state.pending
     conn = sink._conn
     models = (settings.ollama_assistant_model, settings.ollama_guard_model)
@@ -156,6 +157,12 @@ async def chat(
         })
 
     # --- Step 7: generate ------------------------------------------------------
+    sink.write_event(build_event(
+        event_type="llm.request.started", conversation_id=conversation_id,
+        message_id=prompt_message_id, correlation_id=correlation_id, direction="prompt",
+        text=prompt_text, assistant_model=models[0], guard_model=models[1],
+        classification=block_p,
+    ))
     try:
         result = await adapter.chat(messages_for_ollama)
     except OllamaUnavailableError:

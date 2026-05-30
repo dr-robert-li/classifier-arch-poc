@@ -38,12 +38,14 @@ def test_events_returns_turn_events_after_chat(client):
 
     # At least 4 events from this turn
     turn_events = [e for e in events if e.get("conversation_id") == cid]
-    assert len(turn_events) == 4, (
+    assert len(turn_events) == 8, (
         f"Expected 4 events for conversation {cid}, got {len(turn_events)}"
     )
 
     event_types = {e["event_type"] for e in turn_events}
-    expected = {"prompt.received", "llm.request.started", "llm.response.generated", "response.delivered"}
+    expected = {"prompt.received", "prompt.classification.started", "prompt.classification.completed",
+                "llm.request.started", "llm.response.generated",
+                "response.classification.started", "response.classification.completed", "response.delivered"}
     assert event_types == expected, f"Event types mismatch: {event_types}"
 
 
@@ -71,7 +73,7 @@ def test_events_conversation_id_filter(client):
         assert event.get("conversation_id") == "filter-conv-A", (
             f"Unexpected conversation in filtered response: {event.get('conversation_id')}"
         )
-    assert len(events) == 4, f"Expected exactly 4 events for filter-conv-A, got {len(events)}"
+    assert len(events) == 8, f"Expected exactly 8 events for filter-conv-A, got {len(events)}"
 
 
 def test_events_event_type_filter(client):

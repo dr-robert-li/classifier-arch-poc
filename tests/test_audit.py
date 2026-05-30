@@ -259,7 +259,7 @@ class TestJSONLSQLiteSync:
             f"JSONL lines ({jsonl_count}) != SQLite events ({sqlite_count}) "
             f"— dual-store sync broken (SC-3)"
         )
-        assert sqlite_count == 4, f"Expected 4 events for a successful turn, got {sqlite_count}"
+        assert sqlite_count == 8, f"Expected 8 events for a successful turn, got {sqlite_count}"
 
 
 class TestEventSinkValidation:
