@@ -17,9 +17,12 @@ from contextlib import asynccontextmanager
 import httpx
 from fastapi import FastAPI
 
+from gateway.adapters.dlp_scanner import DlpScannerAdapter
 from gateway.adapters.ollama_assistant import OllamaAssistantAdapter
+from gateway.adapters.ollama_guard import OllamaGuardAdapter
 from gateway.audit.event_sink import EventSink
 from gateway.routes.chat import router as chat_router
+from gateway.routes.classify import router as classify_router
 from gateway.routes.events import router as events_router
 from gateway.routes.health import router as health_router
 from gateway.routes.stubs import router as stubs_router
@@ -50,10 +53,17 @@ async def lifespan(app: FastAPI):
         http_client=http_client,
         settings=settings,
     )
+    guard_adapter = OllamaGuardAdapter(
+        http_client=http_client,
+        settings=settings,
+    )
+    scanner_adapter = DlpScannerAdapter()
 
     app.state.http_client = http_client
     app.state.event_sink = event_sink
     app.state.assistant_adapter = assistant_adapter
+    app.state.guard_adapter = guard_adapter
+    app.state.scanner_adapter = scanner_adapter
     app.state.settings = settings
 
     yield
@@ -75,6 +85,7 @@ app = FastAPI(
 
 # Mount routers
 app.include_router(chat_router)
+app.include_router(classify_router)
 app.include_router(events_router)
 app.include_router(health_router)
 app.include_router(stubs_router)
