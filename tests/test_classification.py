@@ -565,3 +565,203 @@ def test_scanner_finding_shape_complete():
 
 # Import pytest at module level for pytest.raises
 import pytest
+
+
+# ---------------------------------------------------------------------------
+# Task 1 (02-02): Classification orchestrator tests
+# Imports are deferred inside each test to avoid collection errors when
+# gateway/classification/orchestrator.py does not yet exist (RED phase).
+# ---------------------------------------------------------------------------
+
+def test_orchestrator_safe_guard_no_findings():
+    """classify_text with safe guard + empty scanner → severity none, label safe, confidence 1.0."""
+    import asyncio
+    from gateway.classification.orchestrator import classify_text
+
+    class _SafeGuard:
+        async def classify(self, messages, direction):
+            return {
+                "llama_guard_label": "safe",
+                "llama_guard_categories": [],
+                "categories": [],
+                "overall_severity": "none",
+                "confidence": 1.0,
+            }
+
+    class _EmptyScanner:
+        def scan(self, text):
+            return []
+
+    result = asyncio.run(classify_text(
+        text="how do I bake a cake",
+        messages_for_guard=[{"role": "user", "content": "how do I bake a cake"}],
+        direction="prompt",
+        guard_adapter=_SafeGuard(),
+        scanner_adapter=_EmptyScanner(),
+    ))
+    assert result["overall_severity"] == "none"
+    assert result["categories"] == []
+    assert result["llama_guard_label"] == "safe"
+    assert result["confidence"] == 1.0
+    assert result["deterministic_findings"] == []
+
+
+def test_orchestrator_high_severity_guard_no_scanner():
+    """classify_text with high-severity guard + empty scanner → overall_severity high."""
+    import asyncio
+    from gateway.classification.orchestrator import classify_text
+
+    class _HighGuard:
+        async def classify(self, messages, direction):
+            return {
+                "llama_guard_label": "unsafe",
+                "llama_guard_categories": ["S1"],
+                "categories": ["dangerous_behavior"],
+                "overall_severity": "high",
+                "confidence": 0.9,
+            }
+
+    class _EmptyScanner:
+        def scan(self, text):
+            return []
+
+    result = asyncio.run(classify_text(
+        text="make a bomb",
+        messages_for_guard=[{"role": "user", "content": "make a bomb"}],
+        direction="prompt",
+        guard_adapter=_HighGuard(),
+        scanner_adapter=_EmptyScanner(),
+    ))
+    assert result["overall_severity"] == "high"
+    assert "dangerous_behavior" in result["categories"]
+    assert result["llama_guard_label"] == "unsafe"
+    assert result["confidence"] == 0.9
+
+
+def test_orchestrator_scanner_wins_over_safe_guard():
+    """classify_text with safe guard + high-severity scanner finding → scanner wins, severity high."""
+    import asyncio
+    from gateway.classification.orchestrator import classify_text
+
+    class _SafeGuard:
+        async def classify(self, messages, direction):
+            return {
+                "llama_guard_label": "safe",
+                "llama_guard_categories": [],
+                "categories": [],
+                "overall_severity": "none",
+                "confidence": 1.0,
+            }
+
+    class _SecretsScanner:
+        def scan(self, text):
+            return [{
+                "category": "secrets",
+                "label": "aws_access_key_id",
+                "span": [0, 20],
+                "severity": "high",
+                "matched_value": "a" * 64,
+            }]
+
+    result = asyncio.run(classify_text(
+        text="AKIA1234567890ABCDEF",
+        messages_for_guard=[{"role": "user", "content": "AKIA1234567890ABCDEF"}],
+        direction="prompt",
+        guard_adapter=_SafeGuard(),
+        scanner_adapter=_SecretsScanner(),
+    ))
+    assert result["overall_severity"] == "high"
+    assert len(result["deterministic_findings"]) == 1
+    assert "secrets" in result["categories"]
+    assert result["llama_guard_label"] == "safe"
+
+
+def test_orchestrator_guard_unavailable_scanner_clean_does_not_raise():
+    """classify_text with UnavailableGuard + empty scanner → does NOT raise; label=unknown, severity=none."""
+    import asyncio
+    from gateway.classification.orchestrator import classify_text
+    from gateway.adapters.ollama_guard import GuardUnavailableError
+
+    class _UnavailableGuard:
+        async def classify(self, messages, direction):
+            raise GuardUnavailableError("guard model stopped in test")
+
+    class _EmptyScanner:
+        def scan(self, text):
+            return []
+
+    # Must NOT raise — fail-closed means scanner survives guard-down
+    result = asyncio.run(classify_text(
+        text="hello world",
+        messages_for_guard=[{"role": "user", "content": "hello world"}],
+        direction="prompt",
+        guard_adapter=_UnavailableGuard(),
+        scanner_adapter=_EmptyScanner(),
+    ))
+    assert result["llama_guard_label"] == "unknown"
+    assert result["overall_severity"] == "none"
+    assert result["confidence"] == 0.0
+
+
+def test_orchestrator_guard_unavailable_scanner_high_survives():
+    """classify_text with UnavailableGuard + high-severity scanner → label unknown, severity high."""
+    import asyncio
+    from gateway.classification.orchestrator import classify_text
+    from gateway.adapters.ollama_guard import GuardUnavailableError
+
+    class _UnavailableGuard:
+        async def classify(self, messages, direction):
+            raise GuardUnavailableError("guard model stopped in test")
+
+    class _HighSecretsScanner:
+        def scan(self, text):
+            return [{
+                "category": "secrets",
+                "label": "aws_access_key_id",
+                "span": [0, 20],
+                "severity": "high",
+                "matched_value": "b" * 64,
+            }]
+
+    result = asyncio.run(classify_text(
+        text="AKIA1234567890ABCDEF",
+        messages_for_guard=[{"role": "user", "content": "AKIA1234567890ABCDEF"}],
+        direction="prompt",
+        guard_adapter=_UnavailableGuard(),
+        scanner_adapter=_HighSecretsScanner(),
+    ))
+    assert result["llama_guard_label"] == "unknown"
+    assert result["overall_severity"] == "high"
+    assert result["confidence"] == 0.0
+    assert len(result["deterministic_findings"]) == 1
+
+
+def test_orchestrator_returned_keys_match_classification_defaults():
+    """classify_text returns all 6 keys that match CLASSIFICATION_DEFAULTS."""
+    import asyncio
+    from gateway.classification.orchestrator import classify_text
+    from gateway.audit.schema import CLASSIFICATION_DEFAULTS
+
+    class _SafeGuard:
+        async def classify(self, messages, direction):
+            return {
+                "llama_guard_label": "safe",
+                "llama_guard_categories": [],
+                "categories": [],
+                "overall_severity": "none",
+                "confidence": 1.0,
+            }
+
+    class _EmptyScanner:
+        def scan(self, text):
+            return []
+
+    result = asyncio.run(classify_text(
+        text="hello",
+        messages_for_guard=[{"role": "user", "content": "hello"}],
+        direction="prompt",
+        guard_adapter=_SafeGuard(),
+        scanner_adapter=_EmptyScanner(),
+    ))
+    for key in CLASSIFICATION_DEFAULTS.keys():
+        assert key in result, f"Missing key: {key}"
