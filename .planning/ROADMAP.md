@@ -32,7 +32,7 @@ A local-first safety gateway built as vertical MVP slices. Phase 1 stands up the
 **Plans**: 2 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Walking skeleton: end-to-end `/chat` → real Ollama → SQLite + JSONL capture; `/health`; adapter Protocols; 501 stub route surface (GATE-01..05, AUDIT-01, AUDIT-02)
+- [x] 01-01-PLAN.md — Walking skeleton: end-to-end `/chat` → real Ollama → SQLite + JSONL capture; `/health`; adapter Protocols; 501 stub route surface (GATE-01..05, AUDIT-01, AUDIT-02)
 - [ ] 01-02-PLAN.md — Idempotent writes + REL-03 graceful unavailability (503, still audited) + `/events` read route (AUDIT-04, REL-03, AUDIT-01, GATE-05)
 
 ### Phase 2: Local Classification
@@ -99,7 +99,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Gateway & Audit Foundation | 0/2 | Not started | - |
+| 1. Gateway & Audit Foundation | 1/2 | In Progress | - |
 | 2. Local Classification | 0/3 | Not started | - |
 | 3. Policy, Approval & Export | 0/3 | Not started | - |
 | 4. Admin Web UI, Skill & E2E Demo | 0/3 | Not started | - |

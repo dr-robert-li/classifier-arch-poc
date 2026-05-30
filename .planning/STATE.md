@@ -1,3 +1,19 @@
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: executing
+stopped_at: "01-01-PLAN.md complete — 27/27 tests green; ready for 01-02 (idempotency + REL-03 + /events)"
+last_updated: "2026-05-30T04:14:21Z"
+last_activity: 2026-05-30 -- Phase 1 Plan 1 (walking skeleton) executed and committed
+progress:
+  total_phases: 4
+  completed_phases: 0
+  total_plans: 2
+  completed_plans: 1
+  percent: 9
+---
+
 # Project State
 
 ## Project Reference
@@ -9,19 +25,20 @@ See: .planning/PROJECT.md (updated 2026-05-30)
 
 ## Current Position
 
-Phase: 1 of 4 (Gateway & Audit Foundation)
-Plan: 0 of 3 in current phase
-Status: Ready to plan
-Last activity: 2026-05-30 — Project initialized (PROJECT.md, config, requirements, roadmap)
+Phase: 1 of 4 (Gateway & Audit Foundation) — EXECUTING
+Plan: 2 of 2 (01-01 complete; 01-02 next)
+Status: Executing Phase 1
+Last activity: 2026-05-30 -- 01-01 complete (27/27 tests green)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 9% (1/11 plans — 01-01 complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
-- Average duration: — min
-- Total execution time: 0 hours
+
+- Total plans completed: 1
+- Average duration: 75 min
+- Total execution time: 1.25 hours
 
 **By Phase:**
 
@@ -30,6 +47,7 @@ Progress: [░░░░░░░░░░] 0%
 | - | - | - | - |
 
 **Recent Trend:**
+
 - Last 5 plans: —
 - Trend: —
 
@@ -47,6 +65,11 @@ Recent decisions affecting current work:
 - Init: Assume Ollama + Llama Guard 3 pre-pulled; no install/pull phase
 - Init: Gateway is sole enforcement boundary; clients never call Ollama directly
 - Init: Vertical MVP structure (each phase delivers an end-to-end capability)
+- 01-01: stdlib sqlite3 + WAL single-writer chosen over aiosqlite (append-only, no benefit)
+- 01-01: UUID5 deterministic event IDs from (conversation_id, message_id, event_type)
+- 01-01: write_event raises ValueError for missing NOT NULL fields BEFORE INSERT
+- 01-01: BLOCKER 2 fix — response messages row inserted before response events (FK-safety)
+- 01-01: Health route uses Depends(get_assistant_adapter) for test overridability
 
 ### Pending Todos
 
@@ -71,5 +94,5 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-05-30
-Stopped at: Project initialization complete — roadmap created, ready to plan Phase 1
+Stopped at: 01-01-PLAN.md complete — 27/27 tests green; ready for 01-02 (idempotency + REL-03 + /events)
 Resume file: None
