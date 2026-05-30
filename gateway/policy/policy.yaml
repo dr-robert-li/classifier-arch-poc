@@ -1,0 +1,47 @@
+# Versioned AI-safety policy (CLAUDE.md: "YAML policy file for category severity,
+# pause rules, redaction rules, and false-positive handling").
+# The gateway loads this at startup; the pause decision, redaction toggle, and
+# false-positive handling are driven from here rather than hard-coded.
+version: local-poc-v1
+
+# Interactions whose overall_severity is in this set are paused for human approval:
+# prompt-side before the model runs, response-side before delivery.
+pause:
+  severities: [high, critical]
+
+description: >
+  Interactions whose overall severity is high or critical are paused for human approval
+  before the model generates (prompt side) or before the response is delivered (response
+  side). Lower severities are logged and allowed.
+
+# Optional per-category severity overrides applied on top of the classifier/scanner output.
+# (Empty by default — the Llama Guard S-code map + DLP scanner severities are authoritative.)
+severity_overrides: {}
+
+# Redact-and-resume behaviour.
+redaction:
+  enabled: true
+  placeholder: "‹redacted:{category}›"
+
+# False-positive handling: when an admin marks a finding as a false positive the interaction
+# is allowed to proceed and the decision is recorded in the audit trail.
+false_positive:
+  allowed: true
+  record_in_audit: true
+
+# Raw classifier label -> plain-language category for the non-technical admin UI.
+category_labels:
+  dangerous_behavior: "Dangerous behaviour"
+  illegal_behavior: "Illegal behaviour"
+  child_safety: "Child safety"
+  specialized_advice: "Specialised advice"
+  privacy: "Privacy exposure"
+  intellectual_property: "Intellectual property"
+  hate_discrimination: "Hate / discrimination"
+  self_harm: "Self-harm"
+  sexual_content: "Sexual content"
+  elections: "Election misinformation"
+  secrets: "Leaked secret / credential"
+  dlp: "Sensitive data (DLP)"
+  bias_fairness: "Bias / fairness"
+  unknown: "Other / unclassified"

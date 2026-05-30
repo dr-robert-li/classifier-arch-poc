@@ -21,42 +21,20 @@ import hashlib
 from datetime import datetime, timezone
 from typing import Any
 
-# ---------------------------------------------------------------------------
-# Pause policy (code constant — Phase 3 would externalise to YAML)
-# ---------------------------------------------------------------------------
-PAUSE_SEVERITIES: set[str] = {"high", "critical"}
+from gateway.policy.engine import POLICY_ENGINE
 
-POLICY: dict[str, Any] = {
-    "policy_version": "local-poc-v1",
-    "pause_severities": sorted(PAUSE_SEVERITIES),
-    "description": (
-        "Interactions whose overall_severity is high or critical are paused for human "
-        "approval before the model generates (prompt side) or before the response is "
-        "delivered (response side). Lower severities are logged and allowed."
-    ),
-}
-
-# Plain-language labels for the non-technical admin UI.
-CATEGORY_LABELS: dict[str, str] = {
-    "dangerous_behavior": "Dangerous behaviour",
-    "illegal_behavior": "Illegal behaviour",
-    "child_safety": "Child safety",
-    "specialized_advice": "Specialised advice",
-    "privacy": "Privacy exposure",
-    "intellectual_property": "Intellectual property",
-    "hate_discrimination": "Hate / discrimination",
-    "self_harm": "Self-harm",
-    "sexual_content": "Sexual content",
-    "elections": "Election misinformation",
-    "secrets": "Leaked secret / credential",
-    "dlp": "Sensitive data (DLP)",
-    "bias_fairness": "Bias / fairness",
-    "unknown": "Other / unclassified",
-}
+# ---------------------------------------------------------------------------
+# Pause policy — now driven by the versioned YAML policy (gateway/policy/policy.yaml)
+# loaded via PolicyEngine, rather than a hard-coded constant (CLAUDE.md requirement).
+# ---------------------------------------------------------------------------
+PAUSE_SEVERITIES: set[str] = POLICY_ENGINE.pause_severities
+POLICY: dict[str, Any] = POLICY_ENGINE.as_dict()
+# Plain-language labels for the non-technical admin UI (from the YAML policy).
+CATEGORY_LABELS: dict[str, str] = POLICY_ENGINE.category_labels
 
 
 def is_paused(severity: str) -> bool:
-    return severity in PAUSE_SEVERITIES
+    return POLICY_ENGINE.is_paused(severity)
 
 
 def _utc_now() -> str:
