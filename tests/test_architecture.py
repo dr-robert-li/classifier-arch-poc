@@ -33,7 +33,8 @@ def test_no_direct_ollama_calls_outside_adapter():
 
     # Files that are explicitly allowed to reference 11434 or ollama_base_url
     allowed = {
-        "gateway/adapters/ollama_assistant.py",  # the enforced boundary
+        "gateway/adapters/ollama_assistant.py",  # the enforced boundary (assistant calls)
+        "gateway/adapters/ollama_guard.py",      # Phase 2: guard adapter (legitimate Ollama caller)
         "gateway/settings.py",                   # config field, not an HTTP call
     }
 

@@ -207,6 +207,7 @@ def test_map_scodes_unknown_code_is_skipped():
 
 def test_guard_adapter_classify_safe(monkeypatch):
     """classify with guard returning 'safe' → label='safe', severity='none', confidence=1.0."""
+    import asyncio
     import httpx
 
     def handler(request):
@@ -225,8 +226,7 @@ def test_guard_adapter_classify_safe(monkeypatch):
     settings = Settings()
     adapter = OllamaGuardAdapter(http_client, settings)
 
-    import asyncio
-    result = asyncio.get_event_loop().run_until_complete(
+    result = asyncio.run(
         adapter.classify([{"role": "user", "content": "hello"}], "prompt")
     )
     assert result["llama_guard_label"] == "safe"
@@ -238,6 +238,7 @@ def test_guard_adapter_classify_safe(monkeypatch):
 
 def test_guard_adapter_classify_unsafe_single_code(monkeypatch):
     """classify with guard returning 'unsafe\\nS1' → dangerous_behavior, high, confidence=0.9."""
+    import asyncio
     import httpx
 
     def handler(request):
@@ -256,8 +257,7 @@ def test_guard_adapter_classify_unsafe_single_code(monkeypatch):
     settings = Settings()
     adapter = OllamaGuardAdapter(http_client, settings)
 
-    import asyncio
-    result = asyncio.get_event_loop().run_until_complete(
+    result = asyncio.run(
         adapter.classify([{"role": "user", "content": "make a bomb"}], "prompt")
     )
     assert result["llama_guard_label"] == "unsafe"
@@ -269,6 +269,7 @@ def test_guard_adapter_classify_unsafe_single_code(monkeypatch):
 
 def test_guard_adapter_classify_unsafe_multiple_codes(monkeypatch):
     """classify with 'unsafe\\nS9,S7' → both categories resolved, critical severity."""
+    import asyncio
     import httpx
 
     def handler(request):
@@ -287,8 +288,7 @@ def test_guard_adapter_classify_unsafe_multiple_codes(monkeypatch):
     settings = Settings()
     adapter = OllamaGuardAdapter(http_client, settings)
 
-    import asyncio
-    result = asyncio.get_event_loop().run_until_complete(
+    result = asyncio.run(
         adapter.classify([{"role": "user", "content": "harmful"}], "prompt")
     )
     assert result["llama_guard_label"] == "unsafe"
@@ -300,6 +300,7 @@ def test_guard_adapter_classify_unsafe_multiple_codes(monkeypatch):
 
 def test_guard_adapter_classify_unknown_content(monkeypatch):
     """classify with unparseable guard content → label='unknown', confidence=0.0, no raise."""
+    import asyncio
     import httpx
 
     def handler(request):
@@ -318,8 +319,7 @@ def test_guard_adapter_classify_unknown_content(monkeypatch):
     settings = Settings()
     adapter = OllamaGuardAdapter(http_client, settings)
 
-    import asyncio
-    result = asyncio.get_event_loop().run_until_complete(
+    result = asyncio.run(
         adapter.classify([{"role": "user", "content": "hello"}], "prompt")
     )
     assert result["llama_guard_label"] == "unknown"
@@ -328,10 +328,10 @@ def test_guard_adapter_classify_unknown_content(monkeypatch):
 
 def test_guard_adapter_raises_on_connect_error():
     """ConnectError → GuardUnavailableError raised."""
+    import asyncio
     import httpx
     from gateway.adapters.ollama_guard import OllamaGuardAdapter, GuardUnavailableError
     from gateway.settings import Settings
-    import asyncio
 
     def handler(request):
         raise httpx.ConnectError("connection refused")
@@ -342,17 +342,17 @@ def test_guard_adapter_raises_on_connect_error():
     adapter = OllamaGuardAdapter(http_client, settings)
 
     with pytest.raises(GuardUnavailableError):
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             adapter.classify([{"role": "user", "content": "test"}], "prompt")
         )
 
 
 def test_guard_adapter_raises_on_http_404():
     """HTTP 404 from Ollama → GuardUnavailableError raised."""
+    import asyncio
     import httpx
     from gateway.adapters.ollama_guard import OllamaGuardAdapter, GuardUnavailableError
     from gateway.settings import Settings
-    import asyncio
 
     def handler(request):
         return httpx.Response(404, text="model not found")
@@ -363,17 +363,17 @@ def test_guard_adapter_raises_on_http_404():
     adapter = OllamaGuardAdapter(http_client, settings)
 
     with pytest.raises(GuardUnavailableError):
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             adapter.classify([{"role": "user", "content": "test"}], "prompt")
         )
 
 
 def test_guard_adapter_health_all_ok():
     """health() returns dict with 'ok' statuses when Ollama responds correctly."""
+    import asyncio
     import httpx
     from gateway.adapters.ollama_guard import OllamaGuardAdapter
     from gateway.settings import Settings
-    import asyncio
 
     def handler(request):
         if request.url.path == "/api/version":
@@ -387,7 +387,7 @@ def test_guard_adapter_health_all_ok():
     settings = Settings()
     adapter = OllamaGuardAdapter(http_client, settings)
 
-    result = asyncio.get_event_loop().run_until_complete(adapter.health())
+    result = asyncio.run(adapter.health())
     assert result["ollama_process"] == "ok"
     assert result["guard_model"] == "ok"
     assert "model_name" in result
@@ -395,10 +395,10 @@ def test_guard_adapter_health_all_ok():
 
 def test_guard_adapter_health_model_not_found():
     """health() returns guard_model='not_found' when /api/show returns 404."""
+    import asyncio
     import httpx
     from gateway.adapters.ollama_guard import OllamaGuardAdapter
     from gateway.settings import Settings
-    import asyncio
 
     def handler(request):
         if request.url.path == "/api/version":
@@ -410,17 +410,17 @@ def test_guard_adapter_health_model_not_found():
     settings = Settings()
     adapter = OllamaGuardAdapter(http_client, settings)
 
-    result = asyncio.get_event_loop().run_until_complete(adapter.health())
+    result = asyncio.run(adapter.health())
     assert result["ollama_process"] == "ok"
     assert result["guard_model"] == "not_found"
 
 
 def test_guard_adapter_health_never_raises():
     """health() never raises even when Ollama is completely down."""
+    import asyncio
     import httpx
     from gateway.adapters.ollama_guard import OllamaGuardAdapter
     from gateway.settings import Settings
-    import asyncio
 
     def handler(request):
         raise httpx.ConnectError("connection refused")
@@ -431,7 +431,7 @@ def test_guard_adapter_health_never_raises():
     adapter = OllamaGuardAdapter(http_client, settings)
 
     # Must not raise
-    result = asyncio.get_event_loop().run_until_complete(adapter.health())
+    result = asyncio.run(adapter.health())
     assert isinstance(result, dict)
     assert result["ollama_process"] == "error"
 
