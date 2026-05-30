@@ -50,7 +50,7 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — Primitives: canonical taxonomy + Llama Guard output parser, Ollama guard adapter, deterministic DLP/secrets scanner (GATE-03 allowlist) (CLASS-03, CLASS-04)
+- [x] 02-01-PLAN.md — Primitives: canonical taxonomy + Llama Guard output parser, Ollama guard adapter, deterministic DLP/secrets scanner (GATE-03 allowlist) (CLASS-03, CLASS-04)
 - [ ] 02-02-PLAN.md — Merge orchestrator + fail-closed fallback, guard/scanner DI wiring + conftest mocks, `/classify/prompt` and `/classify/response` routes (CLASS-05, REL-02)
 - [ ] 02-03-PLAN.md — Chat-flow integration (4→8 classification events + severity column), per-model `/health`, fail-closed gating; breaking-test updates (CLASS-01, CLASS-02, REL-01)
 
@@ -100,6 +100,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Gateway & Audit Foundation | 2/2 | Complete | 2026-05-30 |
-| 2. Local Classification | 0/3 | Not started | - |
+| 2. Local Classification | 1/3 | In progress | - |
 | 3. Policy, Approval & Export | 0/3 | Not started | - |
 | 4. Admin Web UI, Skill & E2E Demo | 0/3 | Not started | - |

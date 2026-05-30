@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "01-02-PLAN.md complete — 38/38 tests green; Phase 1 complete; ready for Phase 2"
-last_updated: "2026-05-30T05:30:00Z"
-last_activity: 2026-05-30 -- Phase 1 Plan 2 (correctness layer) executed and committed
+stopped_at: "02-01-PLAN.md complete — 79/79 tests green; taxonomy, guard adapter, DLP scanner built"
+last_updated: "2026-05-30T06:00:00Z"
+last_activity: 2026-05-30 -- Phase 2 Plan 1 (classification primitives) executed and committed
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
-  percent: 18
+  total_plans: 3
+  completed_plans: 3
+  percent: 27
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-05-30)
 
 ## Current Position
 
-Phase: 1 of 4 (Gateway & Audit Foundation) — COMPLETE
-Plan: 2 of 2 (01-01 complete; 01-02 complete)
-Status: Phase 1 complete; Phase 2 next
-Last activity: 2026-05-30 -- 01-02 complete (38/38 tests green)
+Phase: 2 of 4 (Local Classification) — In progress
+Plan: 1 of 3 (02-01 complete; 02-02 next)
+Status: Phase 2 Plan 1 complete; primitives built; ready for orchestrator (02-02)
+Last activity: 2026-05-30 -- 02-01 complete (79/79 tests green)
 
-Progress: [██░░░░░░░░] 18% (2/11 plans — Phase 1 complete)
+Progress: [███░░░░░░░] 27% (3/11 plans — Phase 1 complete, Phase 2 plan 1 complete)
 
 ## Performance Metrics
 
@@ -73,6 +73,10 @@ Recent decisions affecting current work:
 - 01-02: GET /events opens a separate get_connection per request (WAL concurrent read; writer stays open)
 - 01-02: GATE-03 docstring pitfall — port number in comments trips grep; avoid mentioning port in module docs
 - 01-02: REL-03 retry idempotency was already correct in 01-01; 01-02 adds regression-lock tests
+- 02-01: asyncio.run() required for Python 3.14 (get_event_loop() implicit creation removed)
+- 02-01: dict.fromkeys() for map_scodes dedup — order-preserving vs set() which is non-deterministic
+- 02-01: S5 (Defamation) and S14 (Code Interpreter Abuse) map to unknown/medium [ASSUMED]
+- 02-01: Guard confidence is heuristic [ASSUMED]: 1.0=safe, 0.9=unsafe, 0.0=unknown (no logprobs)
 
 ### Pending Todos
 
@@ -97,5 +101,5 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-05-30
-Stopped at: 01-02-PLAN.md complete — 38/38 tests green; Phase 1 complete; ready for Phase 2 (Local Classification)
+Stopped at: 02-01-PLAN.md complete — 79/79 tests green; taxonomy + guard adapter + DLP scanner built; ready for 02-02 (orchestrator)
 Resume file: None
