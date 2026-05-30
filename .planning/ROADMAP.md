@@ -33,7 +33,7 @@ A local-first safety gateway built as vertical MVP slices. Phase 1 stands up the
 
 Plans:
 - [x] 01-01-PLAN.md — Walking skeleton: end-to-end `/chat` → real Ollama → SQLite + JSONL capture; `/health`; adapter Protocols; 501 stub route surface (GATE-01..05, AUDIT-01, AUDIT-02)
-- [ ] 01-02-PLAN.md — Idempotent writes + REL-03 graceful unavailability (503, still audited) + `/events` read route (AUDIT-04, REL-03, AUDIT-01, GATE-05)
+- [x] 01-02-PLAN.md — Idempotent writes + REL-03 graceful unavailability (503, still audited) + `/events` read route (AUDIT-04, REL-03, AUDIT-01, GATE-05)
 
 ### Phase 2: Local Classification
 **Goal**: Every prompt is classified before generation and every response before delivery, combining Llama Guard 3 (mapped to a canonical taxonomy) with a deterministic DLP/secrets scanner, with model health checks and fail-closed behavior.
@@ -99,7 +99,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Gateway & Audit Foundation | 1/2 | In Progress | - |
+| 1. Gateway & Audit Foundation | 2/2 | Complete | 2026-05-30 |
 | 2. Local Classification | 0/3 | Not started | - |
 | 3. Policy, Approval & Export | 0/3 | Not started | - |
 | 4. Admin Web UI, Skill & E2E Demo | 0/3 | Not started | - |

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "01-01-PLAN.md complete — 27/27 tests green; ready for 01-02 (idempotency + REL-03 + /events)"
-last_updated: "2026-05-30T04:14:21Z"
-last_activity: 2026-05-30 -- Phase 1 Plan 1 (walking skeleton) executed and committed
+stopped_at: "01-02-PLAN.md complete — 38/38 tests green; Phase 1 complete; ready for Phase 2"
+last_updated: "2026-05-30T05:30:00Z"
+last_activity: 2026-05-30 -- Phase 1 Plan 2 (correctness layer) executed and committed
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
-  percent: 9
+  completed_plans: 2
+  percent: 18
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-05-30)
 
 ## Current Position
 
-Phase: 1 of 4 (Gateway & Audit Foundation) — EXECUTING
-Plan: 2 of 2 (01-01 complete; 01-02 next)
-Status: Executing Phase 1
-Last activity: 2026-05-30 -- 01-01 complete (27/27 tests green)
+Phase: 1 of 4 (Gateway & Audit Foundation) — COMPLETE
+Plan: 2 of 2 (01-01 complete; 01-02 complete)
+Status: Phase 1 complete; Phase 2 next
+Last activity: 2026-05-30 -- 01-02 complete (38/38 tests green)
 
-Progress: [█░░░░░░░░░] 9% (1/11 plans — 01-01 complete)
+Progress: [██░░░░░░░░] 18% (2/11 plans — Phase 1 complete)
 
 ## Performance Metrics
 
@@ -70,6 +70,9 @@ Recent decisions affecting current work:
 - 01-01: write_event raises ValueError for missing NOT NULL fields BEFORE INSERT
 - 01-01: BLOCKER 2 fix — response messages row inserted before response events (FK-safety)
 - 01-01: Health route uses Depends(get_assistant_adapter) for test overridability
+- 01-02: GET /events opens a separate get_connection per request (WAL concurrent read; writer stays open)
+- 01-02: GATE-03 docstring pitfall — port number in comments trips grep; avoid mentioning port in module docs
+- 01-02: REL-03 retry idempotency was already correct in 01-01; 01-02 adds regression-lock tests
 
 ### Pending Todos
 
@@ -94,5 +97,5 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-05-30
-Stopped at: 01-01-PLAN.md complete — 27/27 tests green; ready for 01-02 (idempotency + REL-03 + /events)
+Stopped at: 01-02-PLAN.md complete — 38/38 tests green; Phase 1 complete; ready for Phase 2 (Local Classification)
 Resume file: None
