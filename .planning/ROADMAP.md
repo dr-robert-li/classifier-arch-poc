@@ -50,9 +50,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 02-01: Ollama Llama Guard 3 adapter + output parser + canonical taxonomy mapper; `/classify/prompt` and `/classify/response`
-- [ ] 02-02: Deterministic DLP/secrets scanner (keys, private keys, JWTs, cloud creds, bearer tokens, high-entropy, emails, phones, cards)
-- [ ] 02-03: Wire prompt + response classification into the chat flow; per-model health checks and fail-closed gating
+- [ ] 02-01-PLAN.md — Primitives: canonical taxonomy + Llama Guard output parser, Ollama guard adapter, deterministic DLP/secrets scanner (GATE-03 allowlist) (CLASS-03, CLASS-04)
+- [ ] 02-02-PLAN.md — Merge orchestrator + fail-closed fallback, guard/scanner DI wiring + conftest mocks, `/classify/prompt` and `/classify/response` routes (CLASS-05, REL-02)
+- [ ] 02-03-PLAN.md — Chat-flow integration (4→8 classification events + severity column), per-model `/health`, fail-closed gating; breaking-test updates (CLASS-01, CLASS-02, REL-01)
 
 ### Phase 3: Policy, Approval & Export
 **Goal**: A versioned YAML policy drives high-severity pauses on both prompt and response sides, an admin resolves paused interactions through the full action set, and audit records can be exported raw or redacted.
