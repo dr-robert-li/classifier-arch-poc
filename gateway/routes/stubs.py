@@ -1,57 +1,13 @@
 """
-Stub routes for Phase 3-4 endpoints (GATE-05).
+Route surface placeholder (GATE-05).
 
-All routes return HTTP 501 Not Implemented. Their presence establishes the full
-route surface so later phases can implement them without restructuring the API.
+All originally-stubbed endpoints are now implemented:
+- /classify/prompt, /classify/response  -> gateway/routes/classify.py
+- /approvals (+ approve/reject/redact-resume/false-positive/escalate),
+  /policy, /export/jsonl                  -> gateway/routes/admin.py
 
-Phase 2 stubs removed: /classify/prompt and /classify/response are now implemented
-in gateway/routes/classify.py and mounted via classify_router in gateway/main.py.
-
-Phase 3: /approvals, /approvals/{id}/approve, /approvals/{id}/reject,
-          /approvals/{id}/redact-resume, /policy, /export/jsonl
+This empty router is kept so main.py's import/mount remains stable; it registers no routes.
 """
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse
 
 router = APIRouter()
-
-_NOT_IMPLEMENTED = JSONResponse(
-    status_code=501,
-    content={"detail": "Not implemented — planned for a future phase."},
-)
-
-
-@router.get("/approvals")
-async def list_approvals() -> JSONResponse:
-    """Phase 3: List pending approval requests."""
-    return _NOT_IMPLEMENTED
-
-
-@router.post("/approvals/{approval_id}/approve")
-async def approve(approval_id: str) -> JSONResponse:
-    """Phase 3: Approve a pending approval request."""
-    return _NOT_IMPLEMENTED
-
-
-@router.post("/approvals/{approval_id}/reject")
-async def reject(approval_id: str) -> JSONResponse:
-    """Phase 3: Reject a pending approval request."""
-    return _NOT_IMPLEMENTED
-
-
-@router.post("/approvals/{approval_id}/redact-resume")
-async def redact_resume(approval_id: str) -> JSONResponse:
-    """Phase 3: Redact sensitive content and resume the workflow."""
-    return _NOT_IMPLEMENTED
-
-
-@router.get("/policy")
-async def get_policy() -> JSONResponse:
-    """Phase 3: Return the active policy version."""
-    return _NOT_IMPLEMENTED
-
-
-@router.get("/export/jsonl")
-async def export_jsonl() -> JSONResponse:
-    """Phase 3: Export audit events in JSONL format (raw or redacted)."""
-    return _NOT_IMPLEMENTED

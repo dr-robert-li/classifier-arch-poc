@@ -12,21 +12,26 @@ Architecture:
 Run command (local development):
     uvicorn gateway.main:app --host 127.0.0.1 --port 8000
 """
+import os
 from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 
 from gateway.adapters.dlp_scanner import DlpScannerAdapter
 from gateway.adapters.ollama_assistant import OllamaAssistantAdapter
 from gateway.adapters.ollama_guard import OllamaGuardAdapter
 from gateway.audit.event_sink import EventSink
+from gateway.routes.admin import router as admin_router
 from gateway.routes.chat import router as chat_router
 from gateway.routes.classify import router as classify_router
 from gateway.routes.events import router as events_router
 from gateway.routes.health import router as health_router
 from gateway.routes.stubs import router as stubs_router
 from gateway.settings import settings
+
+_UI_INDEX = os.path.join(os.path.dirname(__file__), "static", "index.html")
 
 
 @asynccontextmanager
@@ -65,6 +70,8 @@ async def lifespan(app: FastAPI):
     app.state.guard_adapter = guard_adapter
     app.state.scanner_adapter = scanner_adapter
     app.state.settings = settings
+    # In-process resume context for paused (high-severity) interactions (POC).
+    app.state.pending = {}
 
     yield
 
@@ -88,4 +95,11 @@ app.include_router(chat_router)
 app.include_router(classify_router)
 app.include_router(events_router)
 app.include_router(health_router)
+app.include_router(admin_router)
 app.include_router(stubs_router)
+
+
+@app.get("/", include_in_schema=False)
+async def ui_index() -> FileResponse:
+    """Serve the single-page admin Web UI (dashboard + approval queue + chat console)."""
+    return FileResponse(_UI_INDEX)

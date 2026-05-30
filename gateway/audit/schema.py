@@ -153,6 +153,9 @@ def build_event(
     guard_model: str,
     contains_redactions: bool = False,
     timestamp: str | None = None,
+    classification: dict[str, Any] | None = None,
+    policy: dict[str, Any] | None = None,
+    approval: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Build a complete, schema-valid event dict ready for EventSink.write_event().
@@ -190,8 +193,8 @@ def build_event(
             "text_preview": text[:200],
             "contains_redactions": contains_redactions,
         },
-        "classification": dict(CLASSIFICATION_DEFAULTS),
-        "policy": dict(POLICY_DEFAULTS),
-        "approval": dict(APPROVAL_DEFAULTS),
+        "classification": {**CLASSIFICATION_DEFAULTS, **(classification or {})},
+        "policy": {**POLICY_DEFAULTS, **(policy or {})},
+        "approval": {**APPROVAL_DEFAULTS, **(approval or {})},
         "siem": dict(SIEM_DEFAULTS),
     }
